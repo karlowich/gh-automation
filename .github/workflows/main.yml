@@ -1,0 +1,22 @@
+name: test-action-trigger
+
+on:
+  push:
+    branches: [ refenv.action ]
+
+jobs:
+  hello_world_job:
+    #    runs-on: ubuntu-latest
+    runs-on: self-hosted
+    container:
+      image: refenv/qemu-nvme:latest
+      options: --privileged
+
+    name: Testing cijoe/qemu action
+    steps:
+      - uses: actions/checkout@v2
+      - id: foo
+        uses: refenv/actions@main
+        with:
+          vm-image: 'https://cloud.debian.org/images/cloud/bullseye/daily/latest/debian-11-genericcloud-amd64-daily.qcow2'
+

@@ -1,0 +1,66 @@
+name: 'CIJOE qemu provision and run'
+description: 'Greet someone'
+inputs:
+  vm-image:
+    description: 'Url to cloud-image image'
+    required: true
+    default: 'https://cloud.debian.org/images/cloud/bullseye/daily/latest/debian-11-genericcloud-amd64-daily.qcow2'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Prepare Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Install CIJOE
+      shell: bash
+      run: pip3 install cijoe cijoe-pkg-xnvme
+
+    - name: Setup environment variables
+      shell: bash
+      run: |
+        source ${{ github.action_path }}/scripts/cijoe_env_setup.sh
+        echo "RESULTS=/tmp/results" >> $GITHUB_ENV
+        echo "TARGET_ENV=${CIJ_ENVS}/refenv-xnvme-qemu.sh" >> $GITHUB_ENV
+
+    - name: CIJOE/QEMU, provision guest using Debian cloud image
+      shell: bash
+      run: |
+        source ${{ github.action_path }}/scripts/cijoe_env_setup.sh
+        qemu.img_from_url "${{ inputs.vm-image }}"
+
+    - name: CIJOE/QEMU, start the guest
+      shell: bash
+      run: |
+        source ${{ github.action_path }}/scripts/cijoe_env_setup.sh
+        source "${CIJ_TESTFILES}/qemu_setup_nvme_1c2ns_nvm_zrwa.sh"
+        qemu_setup_pcie
+        QEMU_ARGS_EXTRA="$QEMU_SETUP_PCIE"
+        qemu.run
+
+    - name: CIJOE/QEMU, kill the guest
+      shell: bash
+      if: always()
+      run: |
+        source ${{ github.action_path }}/scripts/cijoe_env_setup.sh
+        qemu.kill
+
+    - name: CIJOE, result-log-dump on error
+      shell: bash
+      if: failure()
+      run: find ${RESULTS} -name "*.log" | xargs cat
+
+    - name: CIJOE, generate report from results
+      shell: bash
+      if: always()
+      run: |
+        source ${{ github.action_path }}/scripts/cijoe_env_setup.sh
+        cij_reporter --output "${RESULTS}"
+
+    # The git-hub-actions-runner does not cleanup after itself
+    - name: Self-hosted, cleanup
+      shell: bash
+      if: always()
+      run: rm -rf *
